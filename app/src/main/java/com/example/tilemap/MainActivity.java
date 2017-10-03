@@ -1,10 +1,14 @@
 package com.example.tilemap;
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -20,17 +24,38 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_main);
+
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                        PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, android.Manifest.permission.INTERNET) == PackageManager.PERMISSION_GRANTED) {
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 2);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.INTERNET}, 3);
+        }
+
         map = (WebView) findViewById(R.id.mapView);
         map.setVerticalScrollBarEnabled(false);
         map.getSettings().setJavaScriptEnabled(true);
-        map.loadUrl("file:///android_asset/map_api.html");
+        map.getSettings().setGeolocationEnabled(true);
+        map.setWebChromeClient(new android.webkit.WebChromeClient() {
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origin, android.webkit.GeolocationPermissions.Callback callback) {
+                callback.invoke(origin, true, false);
+            }
+        });
+
         map.addJavascriptInterface(new MarkerWebInterface(getApplicationContext()), "android_callback");
+
         map.setWebViewClient(new WebViewClient(){
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                String js = "initMap(" + START_GEO + ");";
+                String js = "initMap(" + START_GEO + ", 13);";
 
                 if (android.os.Build.VERSION.SDK_INT >= 19) {
                     map.evaluateJavascript(js, null);
@@ -43,9 +68,12 @@ public class MainActivity extends Activity {
                 markers.add(new Marker("70000001006186603", 25.260066, 55.285606));
                 markers.add(new Marker("70000001007008967", 25.24457, 55.318308));
 
-                showMarkers(markers);
+                //showMarkers(markers);
+                runJSCode("locationCenter();");
             }
         });
+
+        map.loadUrl("file:///android_asset/map_api.html");
     }
 
     private void showMarkers(final List<Marker> markers) {
@@ -59,6 +87,32 @@ public class MainActivity extends Activity {
                 }
             }
         }, 600);
+    }
+
+    private void runJSCode(final String jsCode, int delay) {
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (android.os.Build.VERSION.SDK_INT >= 19) {
+                    map.evaluateJavascript(jsCode, null);
+                } else {
+                    map.loadUrl("javascript: "+jsCode);
+                }
+            }
+        }, delay);
+    }
+
+    private void runJSCode(final String jsCode) {
+        new Handler().post(new Runnable() {
+            @Override
+            public void run() {
+                if (android.os.Build.VERSION.SDK_INT >= 19) {
+                    map.evaluateJavascript(jsCode, null);
+                } else {
+                    map.loadUrl("javascript: "+jsCode);
+                }
+            }
+        });
     }
 
     private String prepareMarkerMessage(List<Marker> markers) {
